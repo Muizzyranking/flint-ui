@@ -1,7 +1,5 @@
 name: Build & publish frontend
 
-name: Build & publish frontend
-
 # Builds and publishes only on `v*` tags and manual dispatch. A tag means
 # dashboard-relevant changes that need a rebuild for Docker Compose to pick
 # up; plain main pushes (UI-only changes) never trigger a rebuild.
