@@ -27,6 +27,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Fetch tags
+        run: git fetch --tags --force
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
@@ -52,6 +55,7 @@ jobs:
       - name: Collect tag notes
         if: startsWith(github.ref, 'refs/tags/')
         run: |
+          mkdir -p dist
           git tag -l --format='%(contents)body' "$GITHUB_REF_NAME" \
             > dist/tag-notes.md
           if [ ! -s dist/tag-notes.md ]; then
@@ -63,6 +67,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          gh release delete "$GITHUB_REF_NAME" --yes >/dev/null 2>&1 || true
           gh release create "$GITHUB_REF_NAME" \
             --verify-tag --title "Flint frontend $GITHUB_REF_NAME" \
             --notes-file dist/tag-notes.md dist/flint-frontend.tar.gz
