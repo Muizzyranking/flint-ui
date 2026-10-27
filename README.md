@@ -1,36 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Flint frontend
 
-## Getting Started
+Next.js frontend for Flint (durable job scheduling over HTTP). The backend is
+a standalone service; this repo only builds the site — Docker Compose
+downloads the released tarball and injects the API configuration at runtime.
 
-First, run the development server:
+## Development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+pnpm dev          # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+To run against the demo dashboard, set env values for the local API:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+API_URL=http://127.0.0.1:8000/api/v1 API_KEY=dev-api-key pnpm dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+No backend? The dashboard renders its "server is probably down" state, which
+is expected without a running API.
 
-## Learn More
+## Build contract
 
-To learn more about Next.js, take a look at the following resources:
+1. **Build:** `pnpm install && pnpm build` with **no runtime values baked in**
+   (no `VITE_API_URL`, no `NEXT_PUBLIC_API_*`).
+2. **Artifact:** CI publishes a gzip tarball as a release asset, containing at
+   its root the runnable site (Next.js standalone build: `server.js` + static
+   assets, run with `node server.js`).
+   Artifact URL = `https://github.com/muizzyranking/flint-ui/releases/download/<tag>/flint-frontend.tar.gz`.
+3. **Runtime env (injected by Compose):**
+   - `API_URL` — host or base URL of the API, e.g. `http://api:8000/api/v1`
+     or just `http://api:8000` (the `/api/v1` prefix is applied exactly once
+     server-side; health checks target the root paths, `/health/*`, per the
+     contract).
+   - `API_KEY` — the same key Flint runs with.
+   - `PORT` — port to listen on (Compose uses `3000`).
+4. **Asset URL:** `https://github.com/muizzyranking/flint-ui/releases/download/latest/flint-frontend.tar.gz`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+These are read **at request time** by server code:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `src/lib/flint-api.ts` — `API_URL` / `API_KEY` are read inside function
+  bodies; `next/server`'s `connection()` keeps the dashboard page dynamic, so
+  env changes never require a rebuild.
+- Server Components / route handlers call the API server-side.
+- The browser only talks to the frontend origin — no CORS flows, no key
+  exposure, identical behaviour in dev and prod.
+- `src/app/api/flint/[...path]/route.ts` proxies `/api/flint/*` →
+  `${API_URL}/*` (method, body, content type; `X-API-Key` injected from env).
+- `src/app/api/flint/sse/stream/route.ts` streams the live ticker as a plain
+  `Response` (the server injects the key, since `EventSource` cannot set
+  headers).## Release flow (CI)
 
-## Deploy on Vercel
+`.github/workflows/release.yml`:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+pnpm install --frozen-lockfile
+pnpm build                       # env-free
+cp -r public .next/standalone/public
+cp -r .next/static .next/standalone/.next/static
+tar -czf flint-frontend.tar.gz -C .next/standalone .
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Runs on every push to `main` (plus manual dispatch) and republishes the
+rolling `latest` release asset — no tag releases. Extra environment
+variables or keys never trigger a rebuild; Compose ships env at runtime.
+
+## Compose
+
+Flint's `docker-compose.yml` carries a **frontend** service behind the
+`frontend` profile, which runs `node server.js` with `PORT=3000`, `API_URL`,
+`API_KEY`:
+
+```bash
+docker compose --profile frontend up -d
+# dashboard at http://127.0.0.1:3000
+```
+
+Routes: landing at `/`, demo dashboard at `/dashboard`, docs at `/docs`.
