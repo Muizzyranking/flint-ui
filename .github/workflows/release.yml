@@ -2,20 +2,19 @@ name: Build & publish frontend
 
 name: Build & publish frontend
 
-# Builds and publishes on every push to main (rolling `latest` release) and
-# on every `v*` tag (versioned release with the tag annotation as notes).
+# Builds and publishes only on `v*` tags and manual dispatch. A tag means
+# dashboard-relevant changes that need a rebuild for Docker Compose to pick
+# up; plain main pushes (UI-only changes) never trigger a rebuild.
 # **No runtime values** — API_URL / API_KEY are never baked in (server code
-# reads them from process.env at request time). Compose downloads the asset
-# and injects env at runtime:
+# reads them from process.env at request time). Compose downloads the
+# versioned asset and injects env at runtime:
 #
-#   https://github.com/muizzyranking/flint-ui/releases/download/latest/flint-frontend.tar.gz
+#   https://github.com/muizzyranking/flint-ui/releases/download/v0.2.0/flint-frontend.tar.gz
 #   node server.js   (PORT=3000, API_URL=http://api:8000/api/v1, API_KEY=…)
 #
 
 on:
   push:
-    branches:
-      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -50,10 +49,8 @@ jobs:
           cp -r public .next/standalone/public
           cp -r .next/static .next/standalone/.next/static
           mkdir -p dist
-          # Tarball root = runnable site: server.js + .next/* + public/*
           tar --exclude='._*' -czf dist/flint-frontend.tar.gz -C .next/standalone .
 
-      # Annotated tags carry their own notes; reuse them as release notes.
       - name: Collect tag notes
         if: startsWith(github.ref, 'refs/tags/')
         run: |
