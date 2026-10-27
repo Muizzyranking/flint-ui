@@ -67,7 +67,7 @@ export const docNav: DocNavGroup[] = [
         ["cli-reference"],
         "cli-reference.md",
         "CLI reference",
-        "CLI reference, including the `flint` command, and the `flint` Docker image."
+        "CLI reference, including the `flint` command, and the `flint` Docker image.",
       ),
     ],
   },
