@@ -107,7 +107,7 @@ function JobCard({
       } ${muted ? "opacity-80" : ""}`}
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="truncate font-mono text-[15px] text-ink">
+        <span className="truncate font-mono text-[15px] leading-[1.4] text-ink">
           {job.type}
         </span>
         <span
@@ -116,7 +116,7 @@ function JobCard({
           p{job.priority}
         </span>
       </div>
-      <div className="mt-2 flex items-center justify-between gap-2 font-mono text-[12.5px] text-faint">
+      <div className="mt-2 flex items-center justify-between gap-2 font-mono text-[12.5px] leading-[1.4] text-faint">
         <span>{job.id}</span>
         {outcome ? (
           <span
@@ -178,8 +178,12 @@ export function HeroConsole() {
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="font-mono text-[12.5px] uppercase tracking-[0.12em] text-faint">
+          {/* Reserved width so the play/pause toggle never shifts the header. */}
+          <span className="hidden w-[172px] truncate text-right font-mono text-[12.5px] uppercase tracking-[0.12em] text-faint sm:block">
             {paused ? "Paused" : "Illustrative sample"}
+          </span>
+          <span className="block w-[64px] text-right font-mono text-[12.5px] uppercase tracking-[0.12em] text-faint sm:hidden">
+            {paused ? "Paused" : "Live"}
           </span>
           <motion.button
             type="button"
@@ -199,10 +203,11 @@ export function HeroConsole() {
       </div>
 
       <div className="grid divide-y divide-line md:grid-cols-[1.05fr_1.1fr_1.15fr] md:divide-x md:divide-y-0">
-        <div className="flex min-h-[228px] flex-col gap-3 p-4 sm:p-5">
+        <div className="flex flex-col gap-3 p-4 sm:p-5">
           <LaneHeader title="Queue" detail={`${state.queue.length} waiting`} />
 
-          <div className="flex flex-col gap-2">
+          {/* Fixed height: 2 cards max, so adding/removing jobs never moves the page. */}
+          <div className="flex h-[168px] flex-col gap-2 overflow-hidden">
             <AnimatePresence initial={false}>
               {state.queue.map((job) => (
                 <motion.div
@@ -230,13 +235,13 @@ export function HeroConsole() {
           </p>
         </div>
 
-        <div className="flex min-h-[228px] flex-col gap-3 bg-raised/30 p-4 sm:p-5">
+        <div className="flex flex-col gap-3 bg-raised/30 p-4 sm:p-5">
           <LaneHeader
             title="Workers"
             detail={state.active ? "1 leased" : "polling"}
           />
 
-          <div className="flex flex-1 flex-col justify-start gap-2">
+          <div className="flex h-[168px] flex-col justify-start gap-2 overflow-hidden">
             <AnimatePresence initial={false}>
               {state.active ? (
                 <motion.div
@@ -247,14 +252,14 @@ export function HeroConsole() {
                 >
                   <div className="rounded-lg border border-processing/40 bg-processing/5 px-3.5 py-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate font-mono text-[15px] text-ink">
+                      <span className="truncate font-mono text-[15px] leading-[1.4] text-ink">
                         {state.active.type}
                       </span>
                       <span className="shrink-0 rounded border border-processing/35 px-1.5 py-0.5 font-mono text-[11.5px] text-processing">
                         processing
                       </span>
                     </div>
-                    <div className="mt-2 flex items-center justify-between font-mono text-[12.5px] text-faint">
+                    <div className="mt-2 flex items-center justify-between font-mono text-[12.5px] leading-[1.4] text-faint">
                       <span>{state.active.id}</span>
                       <span>host-7c2a</span>
                     </div>
@@ -296,10 +301,10 @@ export function HeroConsole() {
           </p>
         </div>
 
-        <div className="flex min-h-[228px] flex-col gap-3 p-4 sm:p-5">
+        <div className="flex flex-col gap-3 p-4 sm:p-5">
           <LaneHeader title="Outcomes" detail={`${state.dlq} in DLQ`} />
 
-          <div className="flex flex-col gap-2">
+          <div className="flex h-[168px] flex-col gap-2 overflow-hidden">
             {state.settled.map((settled) => (
               <motion.div
                 key={settled.job.id}
