@@ -207,8 +207,8 @@ const WALK_DELAY = 1500;
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
 
-export function LifecycleFlow() {
-  const reduce = useReducedMotion();
+/** Shared walk timeline: one run per cycle, then the next route. */
+function useWalkTimeline(reduce: boolean | null) {
   const [slot, setSlot] = useState({ walk: 0, step: 0 });
 
   useEffect(() => {
@@ -229,8 +229,20 @@ export function LifecycleFlow() {
 
   const walk = reduce ? WALKS[0] : WALKS[slot.walk];
   const step = reduce ? walk.nodes.length - 1 : slot.step;
-  const activeNode = walk.nodes[step];
-  const traced = new Set<string>(walk.edges.slice(0, step));
+  const activeNode = walk.nodes[step] as NodeId;
+  /* Light every edge up to — and including — the edge arriving at the
+     active node, so outcome edges color as soon as the node does. The
+     virtual junction between nodes 1 and 2 puts that edge at index `step`. */
+  const traced = new Set<string>(
+    walk.edges.slice(0, step < 2 ? step : step + 1),
+  );
+
+  return { activeNode, traced };
+}
+
+export function LifecycleFlow() {
+  const reduce = useReducedMotion();
+  const { activeNode, traced } = useWalkTimeline(reduce);
   const junctionLive = traced.has("processing-junction");
 
   return (
@@ -318,20 +330,8 @@ export function LifecycleFlow() {
           </div>
         </div>
 
-        {/* Mobile: same tree, stacked */}
-        <div className="sm:hidden">
-          <div className="flex flex-col gap-1">
-            {["pending", "processing"].map((id) => (
-              <MobileStage key={id} id={id} />
-            ))}
-            <div className="ml-6 h-7 w-px bg-white/10" />
-            <div className="flex flex-col gap-5 border-l border-white/10 pl-6 pt-1">
-              {["completed", "failed", "cancelled"].map((id) => (
-                <MobileStage key={id} id={id} />
-              ))}
-            </div>
-          </div>
-        </div>
+        {/* Mobile: portrait fan tree mirroring the desktop walk */}
+        <MobileTree activeNode={activeNode} traced={traced} />
       </div>
 
       <div className="grid gap-5 border-t border-white/10 bg-black/40 px-6 py-5 sm:px-8 lg:grid-cols-2">
@@ -500,32 +500,284 @@ function FlowChip({
 }
 
 /* ------------------------------------------------------------------ */
-/* Nodes (mobile)                                                      */
+/* Mobile: same walk, staged vertically                                */
 /* ------------------------------------------------------------------ */
 
-function MobileStage({ id }: { id: string }) {
-  const isCircle = CIRCLE_NODES.includes(id as NodeId);
-  const spec = NODES[id as NodeId];
+function NodeBadge({
+  spec,
+  active,
+  spinning = false,
+}: {
+  spec: NodeSpec;
+  active: boolean;
+  spinning?: boolean;
+}) {
   const Icon = spec.icon;
-  const size = isCircle ? "size-12" : "size-9";
 
   return (
-    <div className="flex gap-4">
-      <div
-        className={`flex shrink-0 items-center justify-center rounded-full border border-white/15 bg-black ${size}`}
-      >
-        <Icon
-          className={isCircle ? "size-5" : "size-4"}
-          style={{ color: spec.color, opacity: isCircle ? 1 : 0.8 }}
-          weight={isCircle ? "duotone" : "regular"}
+    <div
+      className="relative flex size-12 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black transition-[border-color,background-color] duration-300"
+      style={
+        active
+          ? {
+              borderColor: `color-mix(in srgb, ${spec.color} 65%, transparent)`,
+              backgroundColor: `color-mix(in srgb, ${spec.color} 10%, black)`,
+            }
+          : undefined
+      }
+    >
+      {active ? (
+        <motion.span
+          className="absolute -inset-1.5 rounded-full border"
+          style={{ borderColor: spec.color }}
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
         />
+      ) : null}
+      <Icon
+        className={`size-5 transition-opacity duration-300 ${
+          spinning ? "motion-safe:animate-spin [animation-duration:3s]" : ""
+        }`}
+        style={{ color: spec.color, opacity: active ? 1 : 0.55 }}
+        weight={active ? "fill" : "duotone"}
+      />
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobile: portrait fan tree — SVG edges + nodes pinned like desktop   */
+/* ------------------------------------------------------------------ */
+
+const MOBILE_W = 480;
+const MOBILE_H = 640;
+
+const MOBILE_JUNCTION = { x: 240, y: 238 };
+
+type MobileCircleId =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+const MOBILE_POSITIONS: Record<MobileCircleId, { x: number; y: number }> = {
+  pending: { x: 240, y: 42 },
+  processing: { x: 240, y: 156 },
+  completed: { x: 76, y: 372 },
+  failed: { x: 240, y: 372 },
+  cancelled: { x: 404, y: 372 },
+};
+
+const MOBILE_CHIP_POSITIONS: Record<"retry" | "dlq", { x: number; y: number }> =
+  {
+    retry: { x: 118, y: 494 },
+    dlq: { x: 356, y: 558 },
+  };
+
+const MOBILE_EDGES: {
+  id: string;
+  d: string;
+  color: string;
+  dashed?: boolean;
+  arrow?: boolean;
+}[] = [
+  {
+    id: "pending-processing",
+    d: `M ${MOBILE_POSITIONS.pending.x} ${MOBILE_POSITIONS.pending.y} V ${MOBILE_POSITIONS.processing.y}`,
+    color: "var(--color-processing)",
+  },
+  {
+    id: "processing-junction",
+    d: `M ${MOBILE_POSITIONS.processing.x} ${MOBILE_POSITIONS.processing.y} V ${MOBILE_JUNCTION.y}`,
+    color: "var(--color-processing)",
+  },
+  {
+    id: "junction-completed",
+    d: `M ${MOBILE_JUNCTION.x} ${MOBILE_JUNCTION.y} C 200 280 76 300 ${MOBILE_POSITIONS.completed.x} ${MOBILE_POSITIONS.completed.y}`,
+    color: "var(--color-completed)",
+    arrow: true,
+  },
+  {
+    id: "junction-failed",
+    d: `M ${MOBILE_JUNCTION.x} ${MOBILE_JUNCTION.y} V ${MOBILE_POSITIONS.failed.y}`,
+    color: "var(--color-failed)",
+    arrow: true,
+  },
+  {
+    id: "junction-cancelled",
+    d: `M ${MOBILE_JUNCTION.x} ${MOBILE_JUNCTION.y} C 280 280 404 300 ${MOBILE_POSITIONS.cancelled.x} ${MOBILE_POSITIONS.cancelled.y}`,
+    color: "var(--color-cancelled)",
+    arrow: true,
+  },
+  {
+    id: "failed-retry",
+    d: `M ${MOBILE_POSITIONS.failed.x} ${MOBILE_POSITIONS.failed.y} C 190 420 118 440 ${MOBILE_CHIP_POSITIONS.retry.x} ${MOBILE_CHIP_POSITIONS.retry.y}`,
+    color: "var(--color-pending)",
+    dashed: true,
+  },
+  {
+    id: "failed-dlq",
+    d: `M ${MOBILE_POSITIONS.failed.x} ${MOBILE_POSITIONS.failed.y} C 290 440 356 470 ${MOBILE_CHIP_POSITIONS.dlq.x} ${MOBILE_CHIP_POSITIONS.dlq.y}`,
+    color: "var(--color-accent-bright)",
+  },
+];
+
+function MobileNode({ id, active }: { id: MobileCircleId; active: boolean }) {
+  const spec = NODES[id];
+  const pos = MOBILE_POSITIONS[id];
+
+  return (
+    <div
+      className="absolute z-10 flex -translate-x-1/2 flex-col items-center"
+      style={{
+        left: `${(pos.x / MOBILE_W) * 100}%`,
+        top: `calc(${(pos.y / MOBILE_H) * 100}% - 24px)`,
+      }}
+    >
+      <NodeBadge
+        spec={spec}
+        active={active}
+        spinning={id === "processing" && active}
+      />
+      <p
+        className="mt-2.5 whitespace-nowrap font-mono text-[12px]"
+        style={{ color: active ? spec.color : "var(--color-ink)" }}
+      >
+        {spec.label}
+      </p>
+    </div>
+  );
+}
+
+function MobileChip({ id, active }: { id: NodeId; active: boolean }) {
+  const spec = NODES[id];
+  const Icon = spec.icon;
+
+  return (
+    <div
+      className="relative flex items-center gap-1.5 rounded-full border bg-black px-2.5 py-1 transition-[border-color,background-color] duration-300"
+      style={
+        active
+          ? {
+              borderColor: `color-mix(in srgb, ${spec.color} 55%, transparent)`,
+              backgroundColor: `color-mix(in srgb, ${spec.color} 10%, black)`,
+            }
+          : undefined
+      }
+    >
+      {active ? (
+        <motion.span
+          className="absolute -inset-1 rounded-full border"
+          style={{ borderColor: spec.color }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.25 }}
+        />
+      ) : null}
+      <Icon className="size-2.5" style={{ color: spec.color }} />
+      <span
+        className="whitespace-nowrap font-mono text-[11px] transition-colors duration-300"
+        style={{
+          color: active ? spec.color : "rgb(255 255 255 / 0.45)",
+        }}
+      >
+        {spec.label}
+      </span>
+    </div>
+  );
+}
+
+function MobileTree({
+  activeNode,
+  traced,
+}: {
+  activeNode: NodeId;
+  traced: Set<string>;
+}) {
+  const junctionLive = traced.has("processing-junction");
+
+  return (
+    <div className="sm:hidden">
+      <div
+        className="relative mx-auto w-full max-w-[420px]"
+        style={{ aspectRatio: "480 / 640" }}
+      >
+        <svg
+          className="absolute inset-0 h-full w-full"
+          viewBox="0 0 480 640"
+          fill="none"
+          aria-hidden="true"
+        >
+          <defs>
+            <marker
+              id="lf-arrow-mobile"
+              viewBox="0 0 8 8"
+              refX="7"
+              refY="4"
+              markerWidth="6.5"
+              markerHeight="6.5"
+              orient="auto-start-reverse"
+            >
+              <path d="M0 0 L8 4 L0 8 Z" fill="rgb(255 255 255 / 0.3)" />
+            </marker>
+          </defs>
+
+          {MOBILE_EDGES.map((edge) => {
+            const isTraced = traced.has(edge.id);
+            return (
+              <path
+                key={edge.id}
+                d={edge.d}
+                stroke={isTraced ? edge.color : "rgb(255 255 255 / 0.09)"}
+                strokeWidth={isTraced ? 2 : 1.25}
+                strokeLinecap="round"
+                strokeDasharray={edge.dashed ? "3 7" : undefined}
+                markerEnd={edge.arrow ? "url(#lf-arrow-mobile)" : undefined}
+                className="transition-[stroke,stroke-width] duration-500"
+              />
+            );
+          })}
+        </svg>
+
+        {/* Fork point: the junction the three branches leave */}
+        <span
+          aria-hidden="true"
+          className={`absolute z-10 size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors duration-300 ${
+            junctionLive ? "bg-processing" : "bg-white/25"
+          }`}
+          style={{
+            left: `${(MOBILE_JUNCTION.x / MOBILE_W) * 100}%`,
+            top: `${(MOBILE_JUNCTION.y / MOBILE_H) * 100}%`,
+          }}
+        />
+
+        {(CIRCLE_NODES as MobileCircleId[]).map((id) => (
+          <MobileNode key={id} id={id} active={activeNode === id} />
+        ))}
+
+        {CHIP_NODES.map((id) => (
+          <div
+            key={id}
+            className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
+            style={{
+              left: `${(MOBILE_CHIP_POSITIONS[id as "retry" | "dlq"].x / MOBILE_W) * 100}%`,
+              top: `${(MOBILE_CHIP_POSITIONS[id as "retry" | "dlq"].y / MOBILE_H) * 100}%`,
+            }}
+          >
+            <MobileChip id={id} active={activeNode === id} />
+          </div>
+        ))}
       </div>
-      <div className="min-w-0 pt-1.5">
-        <p className="font-mono text-[13.5px]" style={{ color: spec.color }}>
-          {spec.label}
+
+      {/* Active-state readout: fixed slot so text changes never shift layout. */}
+      <div className="border-t border-white/10 bg-canvas/50 px-5 pb-4 pt-3">
+        <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-white/35">
+          {NODES[activeNode].label}
         </p>
-        <p className="mt-1.5 max-w-[36ch] text-[15.5px] leading-6 text-white/45">
-          {copyFor(id)}
+        <p className="mt-1 min-h-[3.6rem] text-[13.5px] leading-[1.4] text-white/45">
+          {copyFor(activeNode)}
         </p>
       </div>
     </div>
