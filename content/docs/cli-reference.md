@@ -15,7 +15,7 @@ or `.venv/bin/flint …` in a local checkout; plain `flint …` inside the Docke
 images).
 
 Configuration comes from the environment (`DATABASE_URL`, `APP_ENV`,
-`WORKER_*`, …); see the [config reference](./01-getting-started.md#configuration-reference)
+`WORKER_*`, …); see the [config reference](./getting-started.md#configuration-reference)
 in Getting Started. Every command initialises logging first, so failures show
 up as structured log lines.
 
@@ -109,7 +109,7 @@ unexpected failure (e.g. database unreachable).
 
 Differences from the HTTP API: `flint schedule` covers the common path only —
 it does not accept `dependency_ids`. For DAG scheduling use `POST /api/v1/jobs`
-(see the [API Reference](./03-api-reference.md#post-apiv1jobs)).
+(see the [API Reference](./api-reference.md#post-apiv1jobs)).
 
 ## `flint api`
 
@@ -151,7 +151,7 @@ flint worker
 Scale by starting more workers — in Compose that is
 `docker compose up -d --scale worker=3`, elsewhere just run the command on
 more machines pointed at the same database. See the
-[Operations guide](./05-operations.md#stopping-and-restarting-workers) for
+[Operations guide](./operations.md#stopping-and-restarting-workers) for
 stop/restart control over the API.
 
 ## In Docker

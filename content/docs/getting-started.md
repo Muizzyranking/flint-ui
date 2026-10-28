@@ -17,7 +17,7 @@ local development.
 Clone the repository, then start everything from its root:
 
 ```bash
-git clone https://github.com/muizzyranking/flint.git   # ← your fork/host
+git clone https://github.com/muizzyranking/flint.git   # or your fork
 cd flint
 cp .env.example .env                             # edit if needed; defaults are fine for dev
 docker compose up -d --build
@@ -32,8 +32,8 @@ Compose starts five services:
 | `migrate` | One-shot schema migration; API/worker wait for it | Runs and exits |
 | `api` | The REST API + SSE stream | `http://127.0.0.1:8000` |
 | `worker` | Executes jobs | Logs in `./logs` |
-| `mailhog` | Catches outgoing email for development | UI at `http://127.0.0.1:8025`, SMTP at 1025 |
-| `frontend` *(optional)* | The web dashboard — a CI-built artifact, downloaded from `FRONTEND_RELEASE_URL` in `.env` (a gzip tarball with a runnable site); started with `docker compose --profile frontend up -d`, served on `http://127.0.0.1:3000` with `API_URL`, `API_KEY` and `PORT` injected | |
+| `mailhog` *(profile-gated)* | Local SMTP catcher for development | UI at `http://127.0.0.1:8025`, SMTP at 1025. Started only while `mailhog` is in `COMPOSE_PROFILES` (.env default) — with a real relay set in `SMTP_HOST`, remove it and this service never starts; the stack runs unchanged without it |
+| `frontend` *(optional)* | The web dashboard, from the [flint-ui](https://github.com/muizzyranking/flint-ui) CI artifact (defaults to the latest release); serves rendered docs + dashboard on `http://127.0.0.1:3000` | `https://flint.muizzyranking.me/docs` is the hosted version |
 
 Verify the deployment is healthy:
 
@@ -127,6 +127,9 @@ uv run flint schedule --type send_email --payload '{"to":"you@example.com","subj
 uv run flint schedule --type log_processing --at "2026-12-01T09:00:00Z"
 ```
 
+Every command and option is documented in the
+[CLI Reference](./cli-reference.md).
+
 ## 4. Develop without Docker
 
 If you prefer running API/worker locally against your own Postgres + Redis:
@@ -173,6 +176,7 @@ Tune per-worker behaviour with:
 | `WORKER_SHUTDOWN_TIMEOUT` | `30` | Max seconds to drain on shutdown |
 | `JOB_TIMEOUT_SECONDS` | `300` | Per-handler timeout |
 | `WORKER_HANDLERS` | *(empty = all)* | Capability filter, e.g. `send_email,webhook_delivery` |
+| `WORKER_ID` | *(auto)* | Stable identity override; default is `<hostname>-<pid>-<6 hex>` |
 
 ## Configuration reference
 
@@ -193,8 +197,9 @@ All configuration is environment-based (`cp .env.example .env`). Highlights:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `SMTP_HOST` / `SMTP_PORT` | `localhost` / `1025` | MailHog in Compose |
+| `SMTP_HOST` / `SMTP_PORT` | `mailhog` / `1025` (Compose) · `localhost` / `1025` (bare metal) | SMTP relay for `send_email`; set both to your provider, e.g. `smtp.example.com` / `587` |
 | `SMTP_FROM` | `flint@flint.local` | Envelope sender for `send_email` |
+| `COMPOSE_PROFILES` | `mailhog` | Profiles docker compose activates from `.env`. `mailhog` = local SMTP catcher; add/pass `frontend`, `frontend-dev` too when wanted (`docker compose --profile frontend up -d` activates it for one command regardless) |
 | `MAX_PAYLOAD_BYTES` | `262144` | Job payload admission limit (256 KiB) |
 
 ### Maintenance / logging
@@ -202,9 +207,12 @@ All configuration is environment-based (`cp .env.example .env`). Highlights:
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `MAINTENANCE_INTERVAL` | `15` | Seconds between reaper passes (lease expiry, cleanup) |
-| `AGING_INTERVAL` | `30` | Seconds between priority-aging passes |
+| `MEDIUM_PRIORITY_AGE_THRESHOLD` | `120` | Seconds waiting before medium-priority jobs begin aging |
+| `LOW_PRIORITY_AGE_THRESHOLD` | `300` | Seconds waiting before low-priority jobs begin aging |
+| `AGING_DECREMENT` | `0.1` | Per aging pass, `effective_priority` drops by this (floor 1.0; aging runs with the maintenance cadence) |
+| `DEBUG` | `false` | Echo every SQL statement into the logs (development diagnostics) |
 | `LOG_LEVEL` | `INFO` | `DEBUG`/`INFO`/`WARNING`/`ERROR` |
 | `LOG_FILE` | `logs/flint.log` | Rotating JSON log (stdout mirrors it) |
 
 Next: learn everything you can do with jobs in the
-[Usage Guide](./02-usage-guide.md).
+[Usage Guide](./usage-guide.md).

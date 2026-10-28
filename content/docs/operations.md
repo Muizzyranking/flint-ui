@@ -61,7 +61,7 @@ docker compose up -d --scale worker=10
   count and claim-query latency, and tune `WORKER_POLL_INTERVAL` upward if
   you have hundreds of idle workers.
 - Specialist workers: pin types to sub-fleets with `WORKER_HANDLERS` (see
-  [Adding Handlers](./handlers/01-adding-a-new-handler.md#restricting-which-handlers-a-worker-runs)).
+  [Adding Handlers](./handlers/adding-a-new-handler.md#restricting-which-handlers-a-worker-runs)).
 
 ## Stopping and restarting workers
 
@@ -108,8 +108,9 @@ and scaling back up resumes exactly where things left off.
      $API/api/v1/settings \
      -d '{"dlq_threshold": "5", "alert_emails": "[\"oncall@example.com\"]"}'
    ```
-   Emails are sent with the built-in `send_email` handler — in dev they land
-   in MailHog (`http://127.0.0.1:8025`).
+   Emails are sent with the built-in `send_email` handler — with the
+   `mailhog` profile enabled (dev default) they land in MailHog
+   (`http://127.0.0.1:8025`), otherwise in the configured relay's inbox.
 2. **Triage.** Read `last_error` on `GET /api/v1/dlq`, plus the job's detail
    view (`GET /api/v1/jobs/{id}`) for the retry timeline.
 3. **Recover** if the failure was transient (deploy done, dependency fixed):
@@ -132,7 +133,7 @@ leaderless duties executed with conditional updates, safe against overlap):
 | Loop | Interval | Work |
 | --- | --- | --- |
 | Reaper | `MAINTENANCE_INTERVAL` (15s) | Requeues jobs whose lease expired (`WORKER_LEASE_SECONDS`) with no heartbeat; dispatches cancellations that raced a lease; sends DLQ alert emails |
-| Aging | `AGING_INTERVAL` (30s) | Nudges `effective_priority` of pending jobs so old low-priority work eventually outranks new higher-priority work |
+| Aging | `MAINTENANCE_INTERVAL` cadence | Nudges `effective_priority` of pending jobs (thresholds/decrement tuneable) so old low-priority work eventually outranks new higher-priority work |
 
 ## Migrations
 
@@ -162,11 +163,16 @@ boots against a stale schema.
 
 - [ ] `APP_ENV=production`, unique `API_KEY` (+ optionally rotating
       `API_KEYS`), set `POSTGRES_PASSWORD`
+- [ ] Terminate TLS at a reverse proxy/load balancer in front of the API
+      (the API itself serves plain HTTP on `--port`) and only expose the
+      health endpoints publicly if you want to share that with:
+      `/health/live`, `/health/ready`
 - [ ] `CORS_ORIGINS` set to the frontend origin(s) that will call the API
 - [ ] Postgres volume + backups configured
 - [ ] `/health/ready` wired to probes/load balancer
-- [ ] SMTP target swapped from MailHog to a real relay
-      (`SMTP_HOST`/`SMTP_PORT`/`SMTP_FROM`)
+- [ ] `SMTP_HOST`/`SMTP_PORT`/`SMTP_FROM` aim at a real relay **and**
+      `mailhog` removed from `COMPOSE_PROFILES` (so the dev catcher
+      container never starts in this deployment)
 - [ ] DLQ threshold + `alert_emails` configured
 - [ ] Worker scale + `WORKER_CONCURRENCY` sized to your workload
 - [ ] `LOG_LEVEL` and log shipping decided (JSON lines are ready for any

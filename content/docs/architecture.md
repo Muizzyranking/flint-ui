@@ -233,9 +233,13 @@ auto-restarted; a crash is.
   rejected before any rows are written.
 * **Eligibility** — encoded directly in the claim query (§2.1), so DAG joining
   costs no extra bookkeeping.
-* **Cascade-cancel** — when a job fails to DLQ (or is cancelled while pending),
-  downstream pending jobs are cancelled in one pass; the failure reason is
-  recorded so a cascade-reset can distinguish them from user cancellations.
+* **Cascade-cancel** — when a job fails to DLQ **or resolves as `cancelled`**
+  (both a user cancelling a pending job and a worker resolving a cooperative
+  cancellation at its checkpoint), downstream *pending* jobs are cancelled in
+  one pass; the recorded reason distinguishes auto-cancellations from user
+  cancellations, and the walk continues only through branches it actually
+  cancelled — a still-processing dependent keeps ownership of its own subtree
+  until it itself resolves.
 * **Cascade-reset** — retrying a DLQ root resets rows that were auto-cancelled
   by the *same* root failure to `pending`, re-running the workflow from the
   fixed root. User-cancelled jobs stay cancelled.

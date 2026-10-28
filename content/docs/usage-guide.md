@@ -1,7 +1,7 @@
 # Usage Guide
 
 Everything you can do through the API, with examples. The exact wire shapes
-and error payloads are in the [API Reference](./03-api-reference.md).
+and error payloads are in the [API Reference](./api-reference.md).
 
 All examples assume:
 
@@ -11,7 +11,7 @@ export KEY="dev-api-key"
 ```
 
 i.e. every call carries `X-API-Key: $KEY` and targets `$API` (see
-[Getting Started](./01-getting-started.md)).
+[Getting Started](./getting-started.md)).
 
 ## Core concepts
 
@@ -62,7 +62,7 @@ from starving, each passing maintenance window nudges an older job's
 `effective_priority, available_at`, so a `priority 3` job that's waited a
 long time will overtake a freshly submitted `priority 2` job.
 
-Aging cadence is controlled by `AGING_INTERVAL`.
+Aging runs with the maintenance cadence; its thresholds and decrement are tuneable (`MEDIUM_PRIORITY_AGE_THRESHOLD`, `LOW_PRIORITY_AGE_THRESHOLD`, `AGING_DECREMENT`).
 
 ## Scheduled jobs
 
@@ -133,18 +133,22 @@ curl -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
 Semantics:
 
 - A job becomes eligible for claiming only after **all** dependencies are
-  `completed` (satisfaction is written transactionally by the dependency's
-  completer).
-- If a dependency **fails to DLQ** or is **cancelled**, downstream jobs are
-  auto-cancelled — a chain never produces half-results unnoticed.
+  `completed`. Eligibility is re-evaluated live by the dispatch query
+  (poller and claim use the same filter), so a completing parent unblocks
+  its dependents automatically — there is no signalling step that can fail
+  or drift.
+- If a dependency **fails to DLQ** or **resolves as `cancelled`**, all
+  still-*pending* transitive dependents are auto-cancelled with `last_error`
+  naming the upstream — a chain never produces half-results unnoticed.
 - Dependencies can be declared transitively (A → B → C), fan-out (one job,
   many dependents), and fan-in (many dependencies, one job).
 - Cycles are rejected at admission (`422 … would create a cycle`) — the graph
   is checked against the existing edges before insert.
 
-If a DLQ job is replayed (`POST /api/v1/dlq/{id}/retry`), the downstream jobs
-that its failure cancelled are automatically reset to `pending` too, so the
-chain resumes without manual repair.
+If a DLQ job is replayed (`POST /api/v1/dlq/{id}/retry`), exactly the
+downstream jobs its failure auto-cancelled are reset to `pending` (those
+whose cancellation is marked as dependency-cascade), so the chain resumes
+without manual repair — while jobs you cancelled yourself stay cancelled.
 
 ## Retries and the DLQ
 
@@ -176,7 +180,7 @@ curl -X DELETE -H "X-API-Key: $KEY" $API/api/v1/dlq/<job_id>
 
 The DLQ can email you when it grows: set `dlq_threshold` and recipients via
 [Settings](#settings) (see deployment notes in
-[Operations](./05-operations.md#dlq-runbook) for the full runbook).
+[Operations](./operations.md#dlq-runbook) for the full runbook).
 
 ## Cancellation
 
@@ -186,13 +190,16 @@ curl -X PATCH -H "X-API-Key: $KEY" $API/api/v1/jobs/<job_id>/cancel
 
 | Current status | Result |
 | --- | --- |
-| `pending` | Immediately `cancelled`; never claimed afterwards |
-| `processing` | Sets `cancellation_requested`; the worker notices at its next checkpoint and cancels the job when the handler yields (or after the timeout) |
+| `pending` | Immediately `cancelled`; never claimed afterwards. Still-pending transitive dependents are cascade-cancelled at the same instant. |
+| `processing` | Sets `cancellation_requested`; the worker notices at its next checkpoint and cancels the job when the handler yields (or after the timeout) — and its still-pending transitive dependents are cascade-cancelled at that instant. |
 | `completed` / `failed` / `cancelled` | `409 Invalid state transition.` |
 
 Completion writes are conditional on the job still being `processing` **and**
 owned by the same worker, so a slow handler can never mark a cancelled job
-completed.
+completed. Cascade-cancelled dependents carry
+`last_error = "Cancelled: dependency job <id> was cancelled."`; replaying a
+related DLQ failure restores only the dependents auto-cancelled by *that*
+failure, never the ones you cancelled yourself.
 
 ## Deleting jobs (bin)
 
@@ -275,7 +282,7 @@ curl -X POST -H "X-API-Key: $KEY" $API/api/v1/workers/<worker_id>/restart
 ```
 
 Both commands make the worker finish draining gracefully (see
-[Operations](./05-operations.md#stopping-and-restarting-workers) for what
+[Operations](./operations.md#stopping-and-restarting-workers) for what
 each means for your deployment).
 
 ## Settings
@@ -309,9 +316,15 @@ curl -X PATCH -H "X-API-Key: $KEY" -H "Content-Type: application/json" \
   `effective_priority`/availability order across the fleet.
 - **Exactly one lease owner.** `SKIP LOCKED` claims guarantee a job isn't
   concurrently executed by two workers.
+- **Cancellations and failures cascade downstream.** A job that resolves
+  `cancelled` (yours or the worker's) or lands in the DLQ takes its
+  still-pending transitive dependents with it; a DLQ replay restores
+  exactly what the failure cancelled.
 
 ## CLI for humans
 
+The full command set is in the [CLI Reference](./cli-reference.md).
+Quick taste:
 ```bash
 uv run flint handlers                       # registered types + schemas
 uv run flint schedule --type send_email \

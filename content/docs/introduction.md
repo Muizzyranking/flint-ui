@@ -44,23 +44,23 @@ stream out of the box.
    before it can ever fail in production.
 6. **API-only, frontend-agnostic** — One REST contract (`/api/v1/*`), one
    SSE stream, CORS support for web frontends. Build the UI you want against
-   the contract in [the API reference](./03-api-reference.md).
+   the contract in [the API reference](./api-reference.md).
 
 ## Feature grid
 
 | Feature | What it means | Where to see it |
 | --- | --- | --- |
-| Durable queue | PostgreSQL is the source of truth; Redis is never required for dispatch | [Architecture](./04-architecture.md) |
+| Durable queue | PostgreSQL is the source of truth; Redis is never required for dispatch | [Architecture](./architecture.md) |
 | Admission validation | Payloads validated against the handler schema before insert | `POST /api/v1/jobs` error responses |
-| Priority + aging | `priority` 1–3; low-priority jobs age up so they are never starved | [Usage guide](./02-usage-guide.md#priority-and-aging) |
-| Scheduled jobs | Run at any future `scheduled_at` | [Scheduled jobs](./02-usage-guide.md#scheduled-jobs) |
-| Recurring jobs | `interval` like `30s`, `12h`, `1d` chains runs automatically | [Recurring jobs](./02-usage-guide.md#recurring-jobs) |
-| Dependencies (DAG) | Jobs wait for dependencies; failures cascade | [Job chains](./02-usage-guide.md#job-chains-dags) |
-| Retries & DLQ | Configurable attempts, `available_at` backoff, DLQ with replay | [Retries and the DLQ](./02-usage-guide.md#retries-and-the-dlq) |
-| Cancellation | Instant for pending jobs, cooperative for running ones | [Cancellation](./02-usage-guide.md#cancellation) |
-| Real-time events | SSE stream of every job transition | [Monitoring](./02-usage-guide.md#monitoring) |
-| Worker control | List workers, graceful stop/restart from the API | [Workers](./02-usage-guide.md#workers) |
-| Typed handlers | Killer feature for devs: register a handler, get validation + docs for free | [Adding handlers](./handlers/01-adding-a-new-handler.md) |
+| Priority + aging | `priority` 1–3; low-priority jobs age up so they are never starved | [Usage guide](./usage-guide.md#priority-and-aging) |
+| Scheduled jobs | Run at any future `scheduled_at` | [Scheduled jobs](./usage-guide.md#scheduled-jobs) |
+| Recurring jobs | `interval` like `30s`, `12h`, `1d` chains runs automatically | [Recurring jobs](./usage-guide.md#recurring-jobs) |
+| Dependencies (DAG) | Jobs wait for dependencies; failures cascade | [Job chains](./usage-guide.md#job-chains-dags) |
+| Retries & DLQ | Configurable attempts, `available_at` backoff, DLQ with replay | [Retries and the DLQ](./usage-guide.md#retries-and-the-dlq) |
+| Cancellation | Instant for pending jobs, cooperative for running ones | [Cancellation](./usage-guide.md#cancellation) |
+| Real-time events | SSE stream of every job transition | [Monitoring](./usage-guide.md#monitoring) |
+| Worker control | List workers, graceful stop/restart from the API | [Workers](./usage-guide.md#workers) |
+| Typed handlers | Killer feature for devs: register a handler, get validation + docs for free | [Adding handlers](./handlers/adding-a-new-handler.md) |
 
 ## How it works
 

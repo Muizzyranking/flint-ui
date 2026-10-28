@@ -3,8 +3,8 @@
 The complete reference for every HTTP endpoint: conventions, request/response
 shapes, error surface, and the behavioural guarantees behind them. Flint is
 API-only — this is the contract any client codes against. See also the
-[Usage Guide](./02-usage-guide.md) for flowing narratives and the
-[default handlers](./handlers/00-default-handlers.md) for full payload rules.
+[Usage Guide](./usage-guide.md) for flowing narratives and the
+[default handlers](./handlers/default-handlers.md) for full payload rules.
 
 - **Base URL:** `http://127.0.0.1:8000` in development
 - **API prefix:** `/api/v1`
@@ -243,7 +243,7 @@ Returns a single handler entry in `data`; unknown names return `404`.
 ### Built-in handlers
 
 Payload rules, examples and result metadata for every handler are documented
-in [Default Handlers](./handlers/00-default-handlers.md). Summary:
+in [Default Handlers](./handlers/default-handlers.md). Summary:
 
 | Handler | Required payload | Optional payload |
 | --- | --- | --- |
@@ -351,10 +351,13 @@ or is soft-deleted.
 
 No request body.
 
-- `pending`: immediately transitions to `cancelled`.
+- `pending`: immediately transitions to `cancelled`, and cascade-cancels all
+  still-pending transitive dependents (they resolve `cancelled` with
+  `last_error` explaining the upstream).
 - `processing`: sets `cancellation_requested = true`; the worker marks it
-  `cancelled` at its next execution checkpoint. The response still shows the
-  job as `processing`.
+  `cancelled` at its next execution checkpoint (the response status is still
+  `processing`), and at that instant its still-pending transitive dependents
+  are cascade-cancelled too.
 - Terminal (`completed`, `failed`, `cancelled`): `409`.
 
 Response `200`: the updated `JobResponse`.
@@ -475,7 +478,7 @@ entry lapses without another heartbeat.
 Publishes a `stop` control command: the worker finishes in-flight jobs and
 exits gracefully. Response `200` with `{"worker_id": "...", "command": "stop"}`;
 `404` if the worker is not currently registered. See
-[Operations](./05-operations.md#stopping-and-restarting-workers) for
+[Operations](./operations.md#stopping-and-restarting-workers) for
 deployment-specific behaviour.
 
 ### `POST /api/v1/workers/{id}/restart`
@@ -620,10 +623,16 @@ Unauthenticated, no envelope:
 | Worker crash | Leases expire and maintenance requeues the job. |
 | Shutdown | Workers stop accepting work, wait for in-flight handlers, then requeue unfinished jobs. |
 | Timeout | Handlers run with `JOB_TIMEOUT_SECONDS` (default `300`). |
-| Cancellation | Completion is conditional on `status='processing'` and the owning `worker_id`; a late completion cannot overwrite a cancellation. |
+| Cancellation | Completion is conditional on `status='processing'` and the owning `worker_id`; a late completion cannot overwrite a cancellation. Both pending-cancels and worker-resolved cooperative cancels cascade-cancel the job's still-pending transitive dependents; DLQ replay resets exactly the dependents auto-cancelled this way. |
 | Recurrence | The next run is inserted in the same transaction as completion and is protected by a unique `(recurrence_id, recurrence_run)` constraint. |
 | Payload validation | At admission time against the registered handler schema — never after insert. |
 | Handler registration | Static, at process start via the in-repo `register_handler` decorator. The API cannot register executable code at runtime. |
 | Ordering | Global priority ordering is approximated by DB claim order; each worker keeps a bounded local heap for ordering its batch. |
 | Delivery | At-least-once per lease. Handlers should be idempotent. |
 
+## 15. Not in this version
+
+- Runtime handler registration over HTTP — intentionally omitted: it would be
+  a remote code execution surface.
+- Per-tenant projects, RBAC and hashed key management.
+- API rate limiting and per-tenant admission control.

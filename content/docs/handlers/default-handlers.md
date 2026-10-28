@@ -15,7 +15,7 @@ Quick reference:
 
 | Handler | Purpose | Tags |
 | --- | --- | --- |
-| [`send_email`](#send_email) | Transactional email over SMTP | email, notifications |
+| [`send_email`](#send_email) | Transactional email (SMTP by default, one-seam swap) | email, notifications |
 | [`webhook_delivery`](#webhook_delivery) | Call a public HTTP(S) endpoint with JSON | http, integration |
 | [`http_ping`](#http_ping) | Status check on a public URL — cron-style monitoring | http, monitoring |
 | [`http_fetch`](#http_fetch) | Fetch a public URL and carry its body into the result | http, data |
@@ -26,10 +26,20 @@ Quick reference:
 
 ## `send_email`
 
-Sends a MIME multipart/alternative message (plain text and optional HTML)
-through SMTP. In development, Compose points SMTP at MailHog
-(`http://127.0.0.1:8025`); set `SMTP_HOST`/`SMTP_PORT`/`SMTP_FROM` for real
-relays. The envelope sender is `SMTP_FROM`.
+Sends an email (plain text plus optional HTML) through Flint's unified
+email seam, `app/core/email/`. By default that seam delivers over SMTP:
+with the `mailhog` Compose profile enabled (the `.env` default for
+development) mail lands in MailHog at `http://127.0.0.1:8025`; set
+`SMTP_HOST`/`SMTP_PORT`/`SMTP_FROM` (and drop `mailhog` from
+`COMPOSE_PROFILES`) for real relays. The envelope sender is `SMTP_FROM`.
+
+**Not an SMTP user?** The DLQ threshold alerts go through the same seam, so
+you can switch *everything* to an HTTP email API (Postmark, Resend, SES,
+SendGrid, …) in one place: implement the `EmailSender` contract in a new
+module under `app/core/email/` (return the result dict on success, raise on
+failure) and return it from `get_email_sender()` in
+`app/core/email/__init__.py`. That's the only edit — nothing else in the
+codebase touches a transport.
 
 | Field | Type | Required | Constraints |
 | --- | --- | --- | --- |
@@ -244,4 +254,4 @@ Notes:
 ---
 
 Missing something? Handlers are meant to be added freely within this repo —
-see [Adding a New Handler](./01-adding-a-new-handler.md).
+see [Adding a New Handler](./adding-a-new-handler.md).
