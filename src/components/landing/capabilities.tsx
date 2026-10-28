@@ -38,7 +38,7 @@ export function Capabilities() {
         </Reveal>
 
         <div className="mt-12 grid gap-12 lg:grid-cols-[0.95fr_1.05fr] lg:items-start lg:gap-16">
-          <Reveal>
+          <Reveal className="min-w-0">
             <div className="overflow-hidden rounded-xl border border-line bg-surface">
               <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
                 <span className="font-mono text-[12px] uppercase tracking-[0.12em] text-faint">
@@ -111,7 +111,7 @@ export function Capabilities() {
             </p>
           </Reveal>
 
-          <Reveal delay={0.08}>
+          <Reveal delay={0.08} className="min-w-0">
             <div className="border-t border-line">
               {capabilities.map((capability) => (
                 <div

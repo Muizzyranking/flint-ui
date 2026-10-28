@@ -18,7 +18,7 @@ export function Quickstart() {
     <section id="quickstart" className="scroll-mt-20 border-b border-line">
       <div className="mx-auto max-w-6xl px-5 py-20 sm:px-8 lg:py-24">
         <div className="grid gap-12 lg:grid-cols-[0.85fr_1.15fr] lg:items-start lg:gap-16">
-          <Reveal>
+          <Reveal className="min-w-0">
             <h2 className="max-w-[15ch] text-[clamp(2.25rem,4.6vw,3.4rem)] leading-[1.02] font-semibold tracking-[-0.045em] text-ink">
               Running in about a <span className="accent-gradient">minute</span>
               .
@@ -56,7 +56,7 @@ export function Quickstart() {
             </div>
           </Reveal>
 
-          <Reveal delay={0.08}>
+          <Reveal delay={0.08} className="min-w-0">
             <CodeTabs />
           </Reveal>
         </div>

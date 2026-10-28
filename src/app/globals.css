@@ -264,7 +264,9 @@
     border: 1px solid rgb(255 255 255 / 0.06);
     border-radius: 5px;
     padding: 0.12em 0.38em;
-    white-space: nowrap;
+    /* Wrap long inline code (URLs, flags, paths) instead of overflowing the page. */
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
   }
 
   .docs-prose .table-scroll {
