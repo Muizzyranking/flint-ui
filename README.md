@@ -1,8 +1,11 @@
 # Flint frontend
 
-Next.js frontend for Flint (durable job scheduling over HTTP). The backend is
-a standalone service; this repo only builds the site — Docker Compose
-downloads the released tarball and injects the API configuration at runtime.
+Next.js frontend for Flint (durable job scheduling over HTTP). The main
+repository for the distributed system lives at
+https://github.com/muizzyranking/flint, and the docs are hosted at
+https://flint.muizzyranking.me/docs. The backend is a standalone service; this
+repo only builds the site — Docker Compose downloads the released tarball and
+injects the API configuration at runtime.
 
 ## Development
 
