@@ -172,7 +172,9 @@ boots against a stale schema.
 - [ ] `/health/ready` wired to probes/load balancer
 - [ ] `SMTP_HOST`/`SMTP_PORT`/`SMTP_FROM` aim at a real relay **and**
       `mailhog` removed from `COMPOSE_PROFILES` (so the dev catcher
-      container never starts in this deployment)
+      container never starts in this deployment). Entirely different
+      transport (HTTP email API)? Implement it in `app/core/email/` —
+      the `send_email` handler and DLQ alerts switch together
 - [ ] DLQ threshold + `alert_emails` configured
 - [ ] Worker scale + `WORKER_CONCURRENCY` sized to your workload
 - [ ] `LOG_LEVEL` and log shipping decided (JSON lines are ready for any
